@@ -5,6 +5,9 @@
 #include <iterator>
 #include <limits>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#include <tuple>
 
 namespace constants 
 {
@@ -254,18 +257,59 @@ void A_star(const Vec<int> & start, const Vec<int> & goal, Heuristic h)
     std::cout << "Nao achou a solucao\n";
 }
 
+void displayErrorAndExit(std::string && error)
+{
+    std::cout << error << "\n";
+    exit(0);
+}
+
+std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
+{
+    std::ifstream file("estagios");
+    if (!file) 
+    {
+        displayErrorAndExit("Erro ao abrir arquivo estagios");
+    }
+
+    std::tuple<Vec<int>, Vec<int>, Heuristic> tuple;
+
+    std::string input;
+    for (int i = 0; std::getline(file, input); ++i) 
+    {
+        std::istringstream iss(input);
+        if (i == 0 || i == 1) // 2 first lines are stages, start and goal
+        {
+            std::istream_iterator<int> itstart(iss), itend;
+            Vec<int> stage(itstart, itend); // read all elements into vector 
+            if (static_cast<int>(stage.size()) != 9) 
+            {
+                displayErrorAndExit("Erro na leitura do estagio");
+            }
+            if (i == 0) std::get<0>(tuple) = stage; // set tuple with stage
+            else std::get<1>(tuple) = stage; // set tuple with stage
+        }
+        else  if (i == 2) // 3 line, heuristic
+        {
+            int heuristic;
+            iss >> heuristic;
+            if (heuristic != 1 && heuristic != 2)
+            {
+                displayErrorAndExit("Erro na leitura da heuristica");
+            }
+            std::get<2>(tuple) = static_cast<Heuristic>(heuristic);
+        }
+        else break; // no more lines
+    }
+
+    return tuple;
+}
+
 int main()
 {
     std::ios::sync_with_stdio(false);
+    // 2 8 3 1 6 4 7 0 5 // 6 passos
+    // 8 1 3 2 4 5 0 7 6 // 9 passos
 
-    A_star(
-        {2, 8, 3, 1, 6, 4, 7, 0, 5}, // 6 passos
-        //{8, 1, 3, 2, 4, 5, 0, 7, 6}, // 9 passos
-        //{0, 1, 3, 4, 2, 5, 7, 8, 6}, // tem que voltar
-        // {0, 1, 4, 3, 2, 5, 7, 8, 6},
-        // {1, 2, 3, 4, 5, 6, 7, 8, 0}, // nao tem solucao
-        {1, 2, 3, 8, 0, 4, 7, 6, 5},
-        //{1, 2, 3, 4, 5, 6, 7, 8, 0},
-        Heuristic::OutOfPosition
-    );
+    auto data = readData();
+    A_star(std::get<0>(data), std::get<1>(data), std::get<2>(data));
 }
