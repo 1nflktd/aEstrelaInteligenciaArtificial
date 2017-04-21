@@ -312,4 +312,8 @@ int main()
 
     auto data = readData();
     A_star(std::get<0>(data), std::get<1>(data), std::get<2>(data));
+
+    #ifdef WINDOWS
+    system("pause");
+    #endif
 }
