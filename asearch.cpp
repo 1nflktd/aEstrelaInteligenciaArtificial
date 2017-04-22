@@ -265,7 +265,7 @@ void displayErrorAndExit(std::string && error)
 
 std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
 {
-    std::ifstream file("estagios", std::ios::binary);
+    std::ifstream file("estagios.txt", std::ios::binary);
     if (!file) 
     {
         displayErrorAndExit("Erro ao abrir arquivo estagios");
@@ -314,6 +314,6 @@ int main()
     A_star(std::get<0>(data), std::get<1>(data), std::get<2>(data));
 
     #ifdef WINDOWS
-    std::getchar();
+    std::cin.ignore();
     #endif
 }
