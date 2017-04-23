@@ -34,6 +34,12 @@ namespace helpers
     {
         return std::distance(container.begin(), std::find(container.begin(), container.end(), v));
     }
+
+    void displayErrorAndExit(std::string && error)
+    {
+        std::cout << error << "\n";
+        exit(0);
+    }
 }
 
 struct ValDefaultInf 
@@ -160,9 +166,17 @@ int heuristic(const Vec<int> & start, const Vec<int> & goal, Heuristic h)
 
 void printMap(const Map<Vec<int>, Vec<int>> & cameFrom, Vec<int> current) 
 {
+    std::cout << "Solucao encontrada!\n";
+    
+    std::ofstream file {"resultado.h", std::ios::binary};
+    if (!file)
+    {
+        helpers::displayErrorAndExit("Erro ao criar arquivo resultado.h");
+    }
+
     for(int l = 1;; ++l) 
     {
-        std::cout << l << ":\n" << current;
+        file << l << ":\n" << current;
         auto it = cameFrom.find(current);
         if (it == cameFrom.end()) break; // while there are positions it map
         current = it->second;
@@ -315,18 +329,12 @@ void A_star(const Vec<int> & start, const Vec<int> & goal, Heuristic h)
     std::cout << "Nao achou a solucao\n";
 }
 
-void displayErrorAndExit(std::string && error)
+std::tuple<Vec<int>, Vec<int>, Heuristic> readData(const std::string & fileName)
 {
-    std::cout << error << "\n";
-    exit(0);
-}
-
-std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
-{
-    std::ifstream file{"estagios.txt", std::ios::binary};
+    std::ifstream file{fileName, std::ios::binary};
     if (!file) 
     {
-        displayErrorAndExit("Erro ao abrir arquivo estagios");
+        helpers::displayErrorAndExit("Erro ao abrir arquivo estagios");
     }
 
     std::tuple<Vec<int>, Vec<int>, Heuristic> tuple;
@@ -335,6 +343,11 @@ std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
     int line = 0; 
     while (std::getline(file, input)) 
     {
+        if (std::all_of(input.begin(), input.end(), [](char c) {
+                return std::isspace(static_cast<unsigned char>(c));
+            })
+        ) continue; // if all input is blank (problem with windows/linux files)
+
         std::istringstream iss(input);
         if (line == 0 || line == 1) // 2 first lines are stages, start and goal
         {
@@ -342,7 +355,7 @@ std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
             Vec<int> stage(itstart, itend); // read all elements into vector 
             if (static_cast<int>(stage.size()) != 9) 
             {
-                displayErrorAndExit("Erro na leitura do estagio");
+                helpers::displayErrorAndExit("Erro na leitura do estagio");
             }
             if (line == 0) std::get<0>(tuple) = stage; // set tuple with stage
             else std::get<1>(tuple) = stage; // set tuple with stage
@@ -354,7 +367,7 @@ std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
             Heuristic h = static_cast<Heuristic>(heuristic);
             if (h != Heuristic::OutOfPosition && h != Heuristic::SumOfDiff && h != Heuristic::SumOfDistance)
             {
-                displayErrorAndExit("Erro na leitura da heuristica");
+                helpers::displayErrorAndExit("Erro na leitura da heuristica");
             }
             std::get<2>(tuple) = h;
         }
@@ -369,15 +382,13 @@ std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
 int main()
 {
     std::ios::sync_with_stdio(false);
-    // 2 8 3 1 6 4 7 0 5 // 6 passos
-    // 8 1 3 2 4 5 0 7 6 // 9 passos
 
-    auto data = readData();
+    std::string fileName;
+    std::cout << "Digite o nome do arquivo de dados: ";
+    std::cin >> fileName;
+
+    auto data = readData(fileName);
     A_star(std::get<0>(data), std::get<1>(data), std::get<2>(data));
-
-    #ifdef WINDOWS
-    std::cin.ignore();
-    #endif
 
     return 0;
 }
