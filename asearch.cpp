@@ -49,7 +49,8 @@ struct ValDefaultNeg
 enum class Heuristic
 {
     OutOfPosition,
-    SumOfDiff
+    SumOfDiff,
+    SumOfDistance
 };
 
 template<typename T>
@@ -60,6 +61,8 @@ using Vec2d = std::vector<std::vector<T>>;
 
 template<typename T1, typename T2>
 using Map = std::map<T1, T2>;
+
+Vec<int> cachePositionGoal; // cache for heuristic sum of distances
 
 template<typename T>
 std::ostream &operator <<(std::ostream &os, const Vec<T> &v)
@@ -74,6 +77,24 @@ std::ostream &operator <<(std::ostream &os, const Vec<T> &v)
     return os;
 }
 
+void printHeuristicDescription(Heuristic h)
+{
+    switch(h)
+    {
+        case Heuristic::OutOfPosition:
+            std::cout << "Heuristica de numeros fora de posicao.\n";
+            break;
+        case Heuristic::SumOfDiff:
+            std::cout << "Heuristica da soma das diferencas.\n";
+            break;
+        case Heuristic::SumOfDistance:
+            std::cout << "Heuristica da soma das distancias.\n";
+            break;
+        default:
+            std::cout << "Heuristica nao encontrada.\n";
+    }
+}
+
 int heuristicOutOfPosition(const Vec<int> & start, const Vec<int> & goal) 
 {
     int numbersOutPosition = 0;
@@ -81,7 +102,6 @@ int heuristicOutOfPosition(const Vec<int> & start, const Vec<int> & goal)
     {
         if (start[i] != goal[i]) ++numbersOutPosition;
     }
-    
     return numbersOutPosition;
 }
 
@@ -92,12 +112,34 @@ int heuristicSumOfDiff(const Vec<int> & start, const Vec<int> & goal)
     {
         sumDiff += std::abs(start[i] - goal[i]);
     }
-    
     return sumDiff;
+}
+
+int heuristicSumOfDistance(const Vec<int> & start, const Vec<int> & goal) 
+{
+    int manhattanDistanceSum = 0;
+    for (int i = 0; i < 9; ++i) 
+    {
+        int value = start[i];
+        if (value != 0) // dont compute to 0
+        {
+            int column = i / 3;
+            int row = i % 3;
+            //int target = helpers::position(goal, value);
+            int target = cachePositionGoal[value];
+            int targetCol = target / 3; // expected row
+            int targetRow = target % 3; // expected column
+            int dx = column - targetCol; // x-distance to expected coordinate
+            int dy = row - targetRow; // y-distance to expected coordinate
+            manhattanDistanceSum += std::abs(dx) + std::abs(dy);
+        }
+    }
+    return manhattanDistanceSum;
 }
 
 int heuristic(const Vec<int> & start, const Vec<int> & goal, Heuristic h)
 {
+
     if (start.size() != goal.size() || start.size() != 9 || goal.size() != 9) 
     {
         return -1; // error , throw exception ?   
@@ -109,6 +151,8 @@ int heuristic(const Vec<int> & start, const Vec<int> & goal, Heuristic h)
             return heuristicOutOfPosition(start, goal);
         case Heuristic::SumOfDiff:
             return heuristicSumOfDiff(start, goal);
+        case Heuristic::SumOfDistance:
+            return heuristicSumOfDistance(start, goal);
         default:
             return -1;
     }
@@ -180,8 +224,21 @@ int distanceBetween(const Map<Vec<int>, ValDefaultNeg> & level, const Vec<int> &
     return constants::infinity;
 }
 
+void preCalculateHeuristic(Heuristic h, const Vec<int> & goal)
+{
+    if (h == Heuristic::SumOfDistance) 
+    {
+        cachePositionGoal.resize(9); // 0 to 8
+        for (int i = 1; i < 9; ++i)
+        {
+            cachePositionGoal[i] = helpers::position(goal, i);
+        }
+    }
+}
+
 void A_star(const Vec<int> & start, const Vec<int> & goal, Heuristic h) 
 {
+    preCalculateHeuristic(h, goal);
     // The set of nodes already evaluated.
     Vec2d<int> closedSet;
 
@@ -217,6 +274,7 @@ void A_star(const Vec<int> & start, const Vec<int> & goal, Heuristic h)
         
         if (current == goal) 
         {
+            printHeuristicDescription(h);
             printMap(cameFrom, current);
             return;
         }
@@ -265,7 +323,7 @@ void displayErrorAndExit(std::string && error)
 
 std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
 {
-    std::ifstream file("estagios.txt", std::ios::binary);
+    std::ifstream file{"estagios.txt", std::ios::binary};
     if (!file) 
     {
         displayErrorAndExit("Erro ao abrir arquivo estagios");
@@ -274,10 +332,11 @@ std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
     std::tuple<Vec<int>, Vec<int>, Heuristic> tuple;
 
     std::string input;
-    for (int i = 0; std::getline(file, input); ++i) 
+    int line = 0; 
+    while (std::getline(file, input)) 
     {
         std::istringstream iss(input);
-        if (i == 0 || i == 1) // 2 first lines are stages, start and goal
+        if (line == 0 || line == 1) // 2 first lines are stages, start and goal
         {
             std::istream_iterator<int> itstart(iss), itend;
             Vec<int> stage(itstart, itend); // read all elements into vector 
@@ -285,20 +344,23 @@ std::tuple<Vec<int>, Vec<int>, Heuristic> readData()
             {
                 displayErrorAndExit("Erro na leitura do estagio");
             }
-            if (i == 0) std::get<0>(tuple) = stage; // set tuple with stage
+            if (line == 0) std::get<0>(tuple) = stage; // set tuple with stage
             else std::get<1>(tuple) = stage; // set tuple with stage
         }
-        else  if (i == 2) // 3 line, heuristic
+        else  if (line == 2) // 3 line, heuristic
         {
             int heuristic;
             iss >> heuristic;
-            if (heuristic != 1 && heuristic != 2)
+            Heuristic h = static_cast<Heuristic>(heuristic);
+            if (h != Heuristic::OutOfPosition && h != Heuristic::SumOfDiff && h != Heuristic::SumOfDistance)
             {
                 displayErrorAndExit("Erro na leitura da heuristica");
             }
-            std::get<2>(tuple) = static_cast<Heuristic>(heuristic);
+            std::get<2>(tuple) = h;
         }
         else break; // no more lines
+
+        ++line;
     }
 
     return tuple;
@@ -316,4 +378,6 @@ int main()
     #ifdef WINDOWS
     std::cin.ignore();
     #endif
+
+    return 0;
 }
